@@ -1,0 +1,327 @@
+<title>Namespace Request Flow</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: request form and live policy checks on the left; the generated change, pull request and GitOps sync on the right. */
+:root {
+  --bg: #f4f6f8;
+  --surface: #ffffff;
+  --ink: #15202b;
+  --muted: #5a6674;
+  --line: #dde2e8;
+  --accent: #0e6b66;
+  --accent-soft: #e0f0ee;
+  --crit: #b42318;
+  --crit-soft: #fcebe9;
+  --warn: #9a5a06;
+  --warn-soft: #fbefd9;
+  --ok: #1d7540;
+  --ok-soft: #e2f2e7;
+  --add-bg: #e6f4ea;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1419; --surface: #161d24; --ink: #e5eaef; --muted: #93a0ac; --line: #27313b;
+    --accent: #52c2b8; --accent-soft: #12302d; --crit: #ff8f86; --crit-soft: #3b1b19;
+    --warn: #f0b55c; --warn-soft: #382811; --ok: #72d295; --ok-soft: #15301f; --add-bg: #15301f;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1419; --surface: #161d24; --ink: #e5eaef; --muted: #93a0ac; --line: #27313b;
+  --accent: #52c2b8; --accent-soft: #12302d; --crit: #ff8f86; --crit-soft: #3b1b19;
+  --warn: #f0b55c; --warn-soft: #382811; --ok: #72d295; --ok-soft: #15301f; --add-bg: #15301f;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 14px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 28px 48px; display: grid; gap: 20px; }
+.eyebrow { font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.eyebrow .tag { color: var(--warn); background: var(--warn-soft); padding: 2px 8px; border-radius: 999px; margin-left: 8px; letter-spacing: .04em; }
+h1 { margin: 4px 0 2px; font-size: 26px; font-weight: 700; letter-spacing: -.01em; text-wrap: balance; }
+.sub { color: var(--muted); margin: 0; max-width: 70ch; }
+
+.flow { display: flex; flex-wrap: wrap; gap: 6px; font-size: 12.5px; color: var(--muted); }
+.flow span { border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; background: var(--surface); }
+.flow span.done { color: var(--ok); border-color: var(--ok); }
+.flow span.now { color: var(--surface); background: var(--ink); border-color: var(--ink); }
+
+.grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 20px; align-items: start; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: grid; gap: 14px; min-width: 0; }
+.panel h2 { margin: 0; font-size: 15px; font-weight: 600; }
+.panel h2 small { color: var(--muted); font-weight: 400; font-size: 12.5px; margin-left: 6px; }
+
+.who { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; background: var(--bg); padding: 4px; border-radius: 8px; }
+.who button { border: 0; background: transparent; border-radius: 6px; padding: 7px 8px; cursor: pointer; font-size: 13px; }
+.who button[aria-pressed="true"] { background: var(--surface); box-shadow: 0 1px 2px rgba(0,0,0,.08); font-weight: 600; }
+.identity { font-size: 12.5px; color: var(--muted); background: var(--bg); border-radius: 6px; padding: 8px 10px; }
+.identity code { font-family: var(--mono); color: var(--ink); }
+
+.fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.field { display: grid; gap: 4px; min-width: 0; }
+.field.full { grid-column: 1 / -1; }
+.field label { font-size: 12.5px; font-weight: 600; }
+.field .hint { font-size: 12px; color: var(--muted); }
+.field input, .field select { border: 1px solid var(--line); background: var(--surface); border-radius: 7px; padding: 7px 10px; width: 100%; }
+.field input.bad { border-color: var(--crit); }
+
+.checks { display: grid; gap: 8px; }
+.check { display: grid; grid-template-columns: 22px 1fr; gap: 8px; align-items: start; font-size: 13px; }
+.check .icon { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; }
+.check.pass .icon { color: var(--ok); background: var(--ok-soft); }
+.check.fail .icon { color: var(--crit); background: var(--crit-soft); }
+.check.gate .icon { color: var(--warn); background: var(--warn-soft); }
+.check .rule { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+.check .msg { color: var(--ink); }
+.check.fail .msg b { color: var(--crit); }
+.check.gate .msg b { color: var(--warn); }
+
+.primary { border: 0; background: var(--accent); color: #fff; border-radius: 8px; padding: 9px 14px; font-weight: 600; cursor: pointer; justify-self: start; }
+:root[data-theme="dark"] .primary { color: #0b1a19; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .primary { color: #0b1a19; } }
+.primary:disabled { background: var(--line); color: var(--muted); cursor: not-allowed; }
+.secondary { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 8px 12px; font-weight: 600; cursor: pointer; }
+.blocked { font-size: 12.5px; color: var(--crit); }
+
+.filepath { font-family: var(--mono); font-size: 12.5px; color: var(--muted); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px; }
+.code { margin: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); padding: 10px 0; overflow-x: auto; font-family: var(--mono); font-size: 12.5px; }
+.code div { padding: 0 12px; white-space: pre; }
+.code .add { background: var(--add-bg); }
+
+.pr { border: 1px solid var(--line); border-radius: 10px; display: grid; }
+.pr-head { padding: 14px 16px; border-bottom: 1px solid var(--line); display: grid; gap: 6px; }
+.pr-title { font-weight: 600; font-size: 15px; }
+.pr-title .num { color: var(--muted); font-weight: 400; }
+.state { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 10px; border-radius: 999px; }
+.state.open { color: var(--ok); background: var(--ok-soft); }
+.state.merged { color: var(--accent); background: var(--accent-soft); }
+.pr-meta { font-size: 12.5px; color: var(--muted); }
+.pr-meta code { font-family: var(--mono); color: var(--ink); }
+.pr-body { padding: 14px 16px; display: grid; gap: 12px; }
+.pr-body h3 { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.ci { display: grid; gap: 6px; }
+.ci div { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
+.ci .name { font-family: var(--mono); font-size: 12.5px; }
+.ci .st { font-weight: 600; white-space: nowrap; }
+.ci .st.run { color: var(--warn); }
+.ci .st.ok { color: var(--ok); }
+.review { font-size: 13px; background: var(--bg); border-radius: 8px; padding: 10px 12px; }
+.review b.req { color: var(--warn); }
+.review b.auto { color: var(--ok); }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.timeline { display: grid; gap: 0; }
+.step { display: grid; grid-template-columns: 22px 1fr auto; gap: 10px; font-size: 13px; padding: 6px 0; align-items: center; }
+.step .dot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--line); justify-self: center; }
+.step.done .dot { background: var(--ok); border-color: var(--ok); }
+.step.wait { color: var(--muted); }
+.step time { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.placeholder { color: var(--muted); font-size: 13px; background: var(--bg); border-radius: 8px; padding: 14px; }
+
+@media (max-width: 880px) {
+  .grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 420px) {
+  .fields { grid-template-columns: 1fr; }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Self-service provisioning <span class="tag">Prototype · sample data</span></div>
+    <h1>Request a namespace</h1>
+    <p class="sub">Every request becomes a pull request. Policy checks run before anything changes, and Argo CD applies the change only after merge.</p>
+  </header>
+
+  <div class="flow" id="flow" aria-label="Progress"></div>
+
+  <div class="grid">
+    <section class="panel" aria-labelledby="req-h">
+      <h2 id="req-h">1. Request</h2>
+      <div class="who" role="group" aria-label="Requested by">
+        <button id="who-agent" aria-pressed="true">AI agent on my behalf</button>
+        <button id="who-human" aria-pressed="false">Me, directly</button>
+      </div>
+      <div class="identity" id="identity"></div>
+
+      <div class="fields">
+        <div class="field"><label for="team">Team</label>
+          <select id="team"><option value="payroll">payroll</option><option value="billing">billing</option><option value="tax-engine">tax-engine</option><option value="identity">identity</option></select></div>
+        <div class="field"><label for="env">Environment</label>
+          <select id="env"><option value="dev">dev</option><option value="staging" selected>staging</option><option value="prod">prod</option></select></div>
+        <div class="field"><label for="cpu">CPU quota</label>
+          <select id="cpu"><option>2</option><option selected>4</option><option>8</option><option>16</option><option>32</option></select></div>
+        <div class="field"><label for="mem">Memory quota (Gi)</label>
+          <select id="mem"><option>8</option><option selected>16</option><option>32</option><option>64</option></select></div>
+        <div class="field full"><label for="cc">Cost center</label>
+          <input id="cc" placeholder="CC-00000" autocomplete="off">
+          <span class="hint">Payroll's cost center is CC-40217. Leave it blank to see the policy check catch it.</span></div>
+      </div>
+
+      <h2>2. Policy checks <small>run live by the policy engine</small></h2>
+      <div class="checks" id="checks" aria-live="polite"></div>
+      <button class="primary" id="open-pr">Open pull request</button>
+      <div class="blocked" id="blocked" hidden></div>
+    </section>
+
+    <section class="panel" aria-labelledby="chg-h">
+      <h2 id="chg-h">3. Generated change <small>infrastructure as code</small></h2>
+      <div class="filepath"><span id="path"></span><span>new file</span></div>
+      <pre class="code" id="yaml"></pre>
+
+      <h2>4. Pull request and deploy</h2>
+      <div id="pr-area"><div class="placeholder">No pull request yet. Fix any failed checks on the left, then open the pull request.</div></div>
+    </section>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const CPU_MAX = { dev: 8, staging: 16, prod: 32 };
+const CLUSTER = { dev: "usw2-dev-01", staging: "usw2-stg-02", prod: "usw2-prd-01" };
+let byAgent = true, pr = null, timers = [];
+const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function form() {
+  return { team: $("team").value, env: $("env").value, cpu: +$("cpu").value, mem: +$("mem").value, cc: $("cc").value.trim() };
+}
+
+function evaluate(f) {
+  const out = [];
+  const ccOk = /^CC-\d{5}$/.test(f.cc);
+  out.push(ccOk
+    ? { st: "pass", rule: "NS-LABEL-01", msg: `Cost center ${esc(f.cc)} is set.` }
+    : { st: "fail", rule: "NS-LABEL-01", msg: f.cc ? `<b>Cost center must look like CC-12345.</b> You entered "${esc(f.cc)}".` : "<b>Cost center is required.</b> Every namespace must carry a cost-center label for billing." });
+  out.push({ st: "pass", rule: "NS-NAME-02", msg: `Name ${f.team}-${f.env} follows the team-environment convention.` });
+  out.push(f.cpu <= CPU_MAX[f.env]
+    ? { st: "pass", rule: "NS-QUOTA-03", msg: `${f.cpu} CPUs is within the ${f.env} limit of ${CPU_MAX[f.env]}.` }
+    : { st: "fail", rule: "NS-QUOTA-03", msg: `<b>${f.cpu} CPUs is over the ${f.env} limit of ${CPU_MAX[f.env]}.</b> Lower the quota or request a production namespace.` });
+  out.push(f.mem / f.cpu <= 8
+    ? { st: "pass", rule: "NS-RATIO-04", msg: `Memory to CPU ratio is ${f.mem / f.cpu} Gi per CPU (limit 8).` }
+    : { st: "fail", rule: "NS-RATIO-04", msg: `<b>${f.mem} Gi for ${f.cpu} CPUs is ${f.mem / f.cpu} Gi per CPU, over the limit of 8.</b>` });
+  if (f.env === "prod") out.push({ st: "gate", rule: "NS-APPROVE-05", msg: "<b>Production needs a human approval</b> from the team lead before merge." });
+  else if (byAgent) out.push({ st: "pass", rule: "AGENT-SCOPE-06", msg: `The agent's role allows ${f.env} namespaces. It can merge once checks pass.` });
+  else out.push({ st: "pass", rule: "NS-APPROVE-05", msg: `${f.env} namespaces merge automatically once checks pass.` });
+  return out;
+}
+
+function yaml(f) {
+  const ns = `${f.team}-${f.env}`;
+  const by = byAgent ? "agent/devops-assistant" : "user/priya.n";
+  return [
+    "apiVersion: v1", "kind: Namespace", "metadata:", `  name: ${ns}`, "  labels:",
+    `    team: ${f.team}`, `    env: ${f.env}`, `    cost-center: ${f.cc || '""'}`, `    requested-by: ${by}`,
+    "---", "apiVersion: v1", "kind: ResourceQuota", "metadata:", `  name: ${ns}-quota`, `  namespace: ${ns}`,
+    "spec:", "  hard:", `    requests.cpu: "${f.cpu}"`, `    requests.memory: ${f.mem}Gi`
+  ];
+}
+
+function renderFlow() {
+  const stages = ["Request", "Policy checks", "Pull request", "CI checks", "Review", "Merge", "Argo CD sync"];
+  let at = 1;
+  if (pr) at = pr.merged ? (pr.synced ? 7 : 6) : (pr.ciDone ? 4 : 3);
+  $("flow").innerHTML = stages.map((s, i) => `<span class="${i < at ? "done" : i === at ? "now" : ""}">${s}</span>`).join("");
+}
+
+function render() {
+  const f = form();
+  $("identity").innerHTML = byAgent
+    ? `Acting as <code>devops-assistant</code> on behalf of <code>priya.n</code>. Both identities are recorded on the PR.`
+    : `Acting as <code>priya.n</code> (platform engineer).`;
+  const res = evaluate(f);
+  $("checks").innerHTML = res.map(r => `<div class="check ${r.st}"><span class="icon" aria-hidden="true">${r.st === "pass" ? "✓" : r.st === "fail" ? "✕" : "!"}</span>
+    <div><div class="msg">${r.msg}</div><div class="rule">${r.rule}</div></div></div>`).join("");
+  $("cc").classList.toggle("bad", !/^CC-\d{5}$/.test(f.cc));
+  const fails = res.filter(r => r.st === "fail").length;
+  $("open-pr").disabled = fails > 0 || !!pr;
+  $("blocked").hidden = !(fails > 0 && !pr);
+  $("blocked").textContent = fails ? `${fails} policy check${fails > 1 ? "s" : ""} failed. Nothing can be opened until ${fails > 1 ? "they pass" : "it passes"}.` : "";
+  $("path").textContent = `clusters/${CLUSTER[f.env]}/namespaces/${f.team}-${f.env}.yaml`;
+  $("yaml").innerHTML = yaml(pr ? pr.f : f).map(l => `<div class="add">+ ${esc(l)}</div>`).join("");
+  renderFlow();
+}
+
+function later(fn, ms) { timers.push(setTimeout(fn, reduce ? 0 : ms)); }
+
+function openPR() {
+  const f = form();
+  pr = { f, num: 613 + Math.floor(Math.random() * 40), ci: ["running", "running", "running"], ciDone: false, approved: f.env !== "prod", merged: false, synced: false, sync: [] };
+  render(); renderPR();
+  [0, 1, 2].forEach(i => later(() => { pr.ci[i] = "ok"; pr.ciDone = pr.ci.every(c => c === "ok"); renderPR(); renderFlow(); }, 700 + i * 600));
+}
+
+function renderPR() {
+  if (!pr) { $("pr-area").innerHTML = `<div class="placeholder">No pull request yet. Fix any failed checks on the left, then open the pull request.</div>`; return; }
+  const f = pr.f, ns = `${f.team}-${f.env}`;
+  const author = byAgent ? "devops-assistant[bot] for priya.n" : "priya.n";
+  const ciNames = ["policy-check (conftest)", "schema-validate (kubeconform)", "plan (dry-run apply)"];
+  const prod = f.env === "prod";
+  const canMerge = pr.ciDone && pr.approved && !pr.merged;
+  const review = prod
+    ? (pr.approved ? `<b class="auto">Approved</b> by team lead <code>@sanjay.k</code>.` : `<b class="req">Approval required</b> from a payroll team lead (policy NS-APPROVE-05). CODEOWNERS requested <code>@infra-provisioning</code>.`)
+    : `<b class="auto">Auto-merge allowed</b> for ${f.env} once checks pass. CODEOWNERS notified <code>@infra-provisioning</code>.`;
+  const syncSteps = ["Merged to main", "Argo CD detected the change", "Synced to " + CLUSTER[f.env], "Namespace healthy"];
+  $("pr-area").innerHTML = `
+    <div class="pr">
+      <div class="pr-head">
+        <div class="pr-title">Add namespace ${ns} (${f.cpu} CPU, ${f.mem} Gi) <span class="num">#${pr.num}</span></div>
+        <div><span class="state ${pr.merged ? "merged" : "open"}">${pr.merged ? "Merged" : "Open"}</span></div>
+        <div class="pr-meta">By <code>${author}</code> · branch <code>request/${ns}</code> → <code>main</code> · 1 file changed, ${yaml(f).length} additions</div>
+      </div>
+      <div class="pr-body">
+        <h3>Checks</h3>
+        <div class="ci">${ciNames.map((n, i) => `<div><span class="name">${n}</span><span class="st ${pr.ci[i] === "ok" ? "ok" : "run"}">${pr.ci[i] === "ok" ? "✓ Passed" : "Running…"}</span></div>`).join("")}</div>
+        <h3>Review</h3>
+        <div class="review">${review}</div>
+        <div class="actions">
+          ${prod && !pr.approved ? `<button class="secondary" id="approve" ${pr.ciDone ? "" : "disabled"}>Approve as team lead</button>` : ""}
+          <button class="primary" id="merge" ${canMerge ? "" : "disabled"}>${pr.merged ? "Merged" : "Merge pull request"}</button>
+          <button class="secondary" id="reset">Start a new request</button>
+        </div>
+        ${pr.merged ? `<h3>GitOps deploy</h3><div class="timeline">${syncSteps.map((s, i) => `<div class="step ${pr.sync[i] ? "done" : "wait"}"><span class="dot"></span><span>${s}</span><time>${pr.sync[i] || ""}</time></div>`).join("")}</div>` : ""}
+      </div>
+    </div>`;
+}
+
+function merge() {
+  pr.merged = true;
+  const start = new Date();
+  const stamp = sec => new Date(start.getTime() + sec * 1000).toTimeString().slice(0, 8);
+  pr.sync[0] = stamp(0);
+  renderPR(); renderFlow();
+  [[1, 1200, 14], [2, 2400, 41], [3, 3400, 58]].forEach(([i, ms, sec]) => later(() => {
+    pr.sync[i] = stamp(sec);
+    if (i === 3) pr.synced = true;
+    renderPR(); renderFlow();
+  }, ms));
+}
+
+function reset() {
+  timers.forEach(clearTimeout); timers = []; pr = null;
+  render(); renderPR();
+}
+
+["team", "env", "cpu", "mem"].forEach(id => $(id).addEventListener("change", () => { if (!pr) render(); }));
+$("cc").addEventListener("input", () => { if (!pr) render(); });
+$("who-agent").addEventListener("click", () => { if (pr) return; byAgent = true; $("who-agent").setAttribute("aria-pressed", "true"); $("who-human").setAttribute("aria-pressed", "false"); render(); });
+$("who-human").addEventListener("click", () => { if (pr) return; byAgent = false; $("who-human").setAttribute("aria-pressed", "true"); $("who-agent").setAttribute("aria-pressed", "false"); render(); });
+$("open-pr").addEventListener("click", openPR);
+$("pr-area").addEventListener("click", e => {
+  if (e.target.id === "approve") { pr.approved = true; renderPR(); }
+  if (e.target.id === "merge") merge();
+  if (e.target.id === "reset") reset();
+});
+
+render();
+</script>
